@@ -71,7 +71,7 @@ function App() {
           // Trigger the download automatically
           triggerDownload(data.fileUrl);
         } else if (data.status === 'error') {
-          setError(data.message || 'An error occurred.');
+          setError(data.details ? `${data.message}\n\nDetails: ${data.details}` : data.message || 'An error occurred.');
           setIsProcessing(false);
           es.close();
         }
