@@ -43,8 +43,8 @@ app.get('/api/download-stream', (req, res) => {
   const ext = format === 'mp3' ? 'mp3' : 'mp4';
   const outputPath = path.join(downloadsDir, `${jobId}.${ext}`);
 
-  const ffmpegRelative = path.relative(process.cwd(), ffmpegStatic);
-  const outputRelative = path.relative(process.cwd(), outputPath);
+  const ffmpegLocation = process.platform === 'win32' ? path.relative(process.cwd(), ffmpegStatic) : ffmpegStatic;
+  const outputLocation = process.platform === 'win32' ? path.relative(process.cwd(), outputPath) : outputPath;
 
   const ytDlpPath = path.join(
     __dirname, 
@@ -56,8 +56,8 @@ app.get('/api/download-stream', (req, res) => {
 
   const args = [
     url,
-    '--ffmpeg-location', ffmpegRelative,
-    '--output', outputRelative,
+    '--ffmpeg-location', ffmpegLocation,
+    '--output', outputLocation,
     '--no-warnings'
   ];
 
@@ -70,6 +70,8 @@ app.get('/api/download-stream', (req, res) => {
   sendEvent({ status: 'starting', message: 'Initializing download...', progress: 0 });
 
   const subprocess = spawn(ytDlpPath, args);
+
+  let stderrOutput = '';
 
   subprocess.stdout.on('data', (data) => {
     const output = data.toString();
@@ -94,6 +96,7 @@ app.get('/api/download-stream', (req, res) => {
   });
 
   subprocess.stderr.on('data', (data) => {
+    stderrOutput += data.toString();
     console.error(`yt-dlp stderr: ${data}`);
   });
 
@@ -117,8 +120,8 @@ app.get('/api/download-stream', (req, res) => {
       console.error('Download error: yt-dlp exited with code', code);
       sendEvent({
         status: 'error',
-        message: 'Failed to process media. The link might be unsupported, private, or rate-limited.',
-        details: `Process exited with code ${code}`
+        message: 'Failed to process media.',
+        details: stderrOutput.trim() || `Process exited with code ${code}`
       });
       res.end();
     }
