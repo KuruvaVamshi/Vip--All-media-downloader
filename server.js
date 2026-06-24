@@ -58,7 +58,9 @@ app.get('/api/download-stream', (req, res) => {
     url,
     '--ffmpeg-location', ffmpegLocation,
     '--output', outputLocation,
-    '--no-warnings'
+    '--no-warnings',
+    '--rm-cache-dir',
+    '--extractor-args', 'youtube:player_client=android,web;player_skip=webpage,configs'
   ];
 
   if (format === 'mp3') {
