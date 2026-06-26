@@ -3,6 +3,7 @@ import cors from 'cors';
 import { spawn } from 'child_process';
 import ffmpegStatic from 'ffmpeg-static';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
@@ -21,6 +22,57 @@ const downloadsDir = path.join(__dirname, 'downloads');
 if (!fs.existsSync(downloadsDir)) {
   fs.mkdirSync(downloadsDir, { recursive: true });
 }
+
+const youtubeHostPattern = /(^|\.)youtube\.com$|(^|\.)youtu\.be$|(^|\.)youtube-nocookie\.com$/i;
+let generatedCookiesPath = null;
+
+const isYouTubeUrl = (value) => {
+  try {
+    return youtubeHostPattern.test(new URL(value).hostname);
+  } catch {
+    return false;
+  }
+};
+
+const materializeCookieEnv = () => {
+  const cookieContent = process.env.YTDLP_COOKIES_CONTENT || process.env.YOUTUBE_COOKIES_CONTENT;
+  const cookieBase64 = process.env.YTDLP_COOKIES_BASE64 || process.env.YOUTUBE_COOKIES_BASE64;
+
+  if (!cookieContent && !cookieBase64) return null;
+  if (generatedCookiesPath) return generatedCookiesPath;
+
+  const rawCookies = cookieBase64
+    ? Buffer.from(cookieBase64, 'base64').toString('utf8')
+    : cookieContent.replace(/\\n/g, '\n');
+
+  generatedCookiesPath = path.join(os.tmpdir(), `yt-dlp-cookies-${process.pid}.txt`);
+  fs.writeFileSync(generatedCookiesPath, rawCookies, { mode: 0o600 });
+  return generatedCookiesPath;
+};
+
+const getCookiesPath = () => {
+  const cookiePath = process.env.YTDLP_COOKIES_FILE || process.env.YOUTUBE_COOKIES_FILE;
+
+  if (cookiePath) {
+    if (fs.existsSync(cookiePath)) return cookiePath;
+    console.warn(`Configured cookie file was not found: ${cookiePath}`);
+  }
+
+  return materializeCookieEnv();
+};
+
+const buildFriendlyError = (stderrOutput, url) => {
+  const details = stderrOutput.trim();
+  const needsCookies = isYouTubeUrl(url) && /Sign in to confirm|not a bot|cookies-from-browser|--cookies/i.test(details);
+
+  if (!needsCookies) return details;
+
+  return [
+    details,
+    '',
+    'YouTube is asking for authenticated cookies on the server IP. On Render, add a Netscape-format YouTube cookies file using YTDLP_COOKIES_FILE, YTDLP_COOKIES_BASE64, or YTDLP_COOKIES_CONTENT, then redeploy.',
+  ].join('\n');
+};
 
 app.get('/api/download-stream', (req, res) => {
   const { url, format } = req.query;
@@ -62,6 +114,11 @@ app.get('/api/download-stream', (req, res) => {
     '--rm-cache-dir',
     '--extractor-args', 'youtube:player_client=android,web;player_skip=webpage,configs'
   ];
+
+  const cookiesPath = isYouTubeUrl(url) ? getCookiesPath() : null;
+  if (cookiesPath) {
+    args.push('--cookies', cookiesPath);
+  }
 
   if (format === 'mp3') {
     args.push('--extract-audio', '--audio-format', 'mp3', '--format', 'bestaudio');
@@ -123,7 +180,7 @@ app.get('/api/download-stream', (req, res) => {
       sendEvent({
         status: 'error',
         message: 'Failed to process media.',
-        details: stderrOutput.trim() || `Process exited with code ${code}`
+        details: buildFriendlyError(stderrOutput, url) || `Process exited with code ${code}`
       });
       res.end();
     }

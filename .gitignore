@@ -11,6 +11,11 @@ node_modules
 dist
 dist-ssr
 downloads/
+.env
+.env.*
+!.env.example
+cookies.txt
+*cookies*.txt
 *.local
 
 # Editor directories and files

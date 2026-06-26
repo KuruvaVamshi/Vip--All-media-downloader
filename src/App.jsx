@@ -41,7 +41,7 @@ function App() {
       eventSourceRef.current.close();
     }
 
-    const apiUrl = process.env.NODE_ENV === 'production' 
+    const apiUrl = import.meta.env.PROD 
       ? '/api/download-stream' 
       : 'http://localhost:3000/api/download-stream';
       
@@ -88,7 +88,7 @@ function App() {
   };
 
   const triggerDownload = (fileUrl) => {
-    const backendUrl = process.env.NODE_ENV === 'production' ? '' : 'http://localhost:3000';
+    const backendUrl = import.meta.env.PROD ? '' : 'http://localhost:3000';
     const a = document.createElement('a');
     a.href = `${backendUrl}${fileUrl}`;
     a.download = ''; 
